@@ -23,6 +23,7 @@ source "ibmcloud-vpc" "packer" {
   vsi_profile             = var.default_size
   ssh_username            = "root"
   image_name              = var.snapshot_name
+  timeout                 = "50m"
 }
 
 build {
