@@ -140,7 +140,7 @@ function specs {
 function setVPC {
     echo -e "${Green}Printing IBM Cloud VPCs ${Color_Off}"
     ibmcloud is vpcs
-    echo -e -n "${Green}What VPC would you like to use? (press enter to create a new one): \n>> ${Color_Off}"
+    echo -e -n "${Green}What VPC ID would you like to use? (press enter to create a new one): \n>> ${Color_Off}"
     read vpc
     if [[ "$vpc" == "" ]]; then
      name="axiom-$(date +%m-%d-%H-%M-%S-%1N)"
@@ -153,7 +153,7 @@ function setVPC {
    fi
    echo -e "${Green}Printing available subnets in VPC $vpc ${Color_Off}"
    ibmcloud is subnets --vpc $vpc
-   echo -e -n "${Green}What VPC subnet would you like to use? (press enter to create a new one): \n>> ${Color_Off}"
+   echo -e -n "${Green}What VPC subnet ID would you like to use? (press enter to create a new one): \n>> ${Color_Off}"
    read vpc_subnet
    if [[ "$vpc_subnet" == "" ]]; then
    subnet_name="axiom-vpc-subnet-$(date +%m-%d-%H-%M-%S-%1N)"
