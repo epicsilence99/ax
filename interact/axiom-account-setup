@@ -16,18 +16,21 @@ provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
 # IBM-specific logic: If provider is 'ibm', ask for Classic or VPC choice
 ibm_function() {
  if [[ "$provider" == "ibm" ]]; then
-    echo -e -n "${Green}Please choose either Classic or VPC infrastructure \n>> ${Color_Off}"
-    read -e answer
-    answer_lower=$(echo "$answer" | tr '[:upper:]' '[:lower:]')
+    echo -e -n "${Green}Please choose the infrastructure:\n1) Classic\n2) VPC\n>> ${Color_Off}"
+    read -e choice
 
-    if [[ "$answer_lower" == "classic" ]]; then
-        provider_path="$AXIOM_PATH/interact/account-helpers/ibm-classic.sh"
-    elif [[ "$answer_lower" == "vpc" ]]; then
-        provider_path="$AXIOM_PATH/interact/account-helpers/ibm-vpc.sh"
-    else
-        echo -e "${Red}Invalid infrastructure choice. Please choose 'classic' or 'vpc'.${Color_Off}"
-        exit 1
-    fi
+    case $choice in
+        1)
+            provider_path="$AXIOM_PATH/interact/account-helpers/ibm-classic.sh"
+            ;;
+        2)
+            provider_path="$AXIOM_PATH/interact/account-helpers/ibm-vpc.sh"
+            ;;
+        *)
+            echo -e "${Red}Invalid choice. Please choose either 1 for Classic or 2 for VPC.${Color_Off}"
+            exit 1
+            ;;
+    esac
  fi
 }
 ibm_function
