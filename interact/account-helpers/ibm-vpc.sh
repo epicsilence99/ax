@@ -164,7 +164,7 @@ function setVPC {
 }
 
 function setprofile {
-    data="{\"ibm_cloud_api_key\":\"$ibm_cloud_api_key\",\"default_size\":\"$profile\",\"resource_group\":\"$resource_group\",\"region\":\"$region\",\"zone\":\"$zone\",\"provider\":\"ibm-vpc\",\"vpc\":\"$vpc\",\"vpc_subnet\":\"$vpc_subnet\"}"
+    data="{\"ibm_cloud_api_key\":\"$ibm_cloud_api_key\",\"default_size\":\"$profile\",\"resource_group\":\"$resource_group\",\"physical_region\":\"$region\",\"region\":\"$zone\",\"provider\":\"ibm-vpc\",\"vpc\":\"$vpc\",\"vpc_subnet\":\"$vpc_subnet\"}"
     echo -e "${BGreen}Profile settings below:${Color_Off}"
     echo $data | jq ' .ibm_cloud_api_key = "********"'
     echo -e "${BWhite}Press enter to save these to a new profile, type 'r' to start over.${Color_Off}"
