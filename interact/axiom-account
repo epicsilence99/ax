@@ -229,7 +229,7 @@ if [[ "$provider" == "ibm-classic" ]] || [[ "$provider" == "ibm-vpc" ]] ; then
     token="$(jq -r '.ibm_cloud_api_key' "$AXIOM_PATH"/accounts/"$1".json)"
     ibmcloud login --apikey "$token" --no-region || bootstrap
     if [[ $provider == "ibm-vpc" ]]; then
-     region="$(jq -r '.region' "$AXIOM_PATH"/accounts/"$1".json)"
+     region="$(jq -r '.physical_region' "$AXIOM_PATH"/accounts/"$1".json)"
      resource_group="$(jq -r '.resource_group' "$AXIOM_PATH"/accounts/"$1".json)"
      ibmcloud target -r $region -g $resource_group
     fi
