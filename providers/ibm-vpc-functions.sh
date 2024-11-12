@@ -13,7 +13,8 @@ create_instance() {
     region="$4"
     vpc_id="$(jq -r '.vpc' "$AXIOM_PATH"/axiom.json)"
     subnet_id="$(jq -r '.vpc_subnet' "$AXIOM_PATH"/axiom.json)"
-    ibmcloud is instance-create "$name" "$vpc_id" "$region" "$profile" "$subnet_id" --image "$image_id" 2>&1 >>/dev/null
+    ibmcloud is instance-create "$name" "$vpc_id" "$region" "$profile" "$subnet_id" --image "$image_id" --pnac-vni-name "$name"-vni  --pnac-name "$name"-pnac 2>&1 >>/dev/null && \
+     ibmcloud is  floating-ip-reserve "$name"-ip --vni "$name"-vni --in "$name" >>/dev/null
     sleep 260
 }
 
@@ -24,12 +25,11 @@ create_instance() {
 delete_instance() {
     name="$1"
     force="$2"
-    id="$(instance_id $name)"
     if [ "$force" == "true" ]
     then
-        ibmcloud is instance-delete "$id" --force --output json >/dev/null 2>&1
+        ibmcloud is instance-delete "$name" --force >/dev/null 2>&1
     else
-        ibmcloud is instance-delete "$id" --output json
+        ibmcloud is instance-delete "$name" 
     fi
 }
 
@@ -123,7 +123,7 @@ query_instances() {
                 if [[ "$var" =~ "*" ]]
                 then
                         var=$(echo "$var" | sed 's/*/.*/g')
-                        selected="$selected $(echo $droplets | jq -r '.[].hostname' | grep "$var")"
+                        selected="$selected $(echo $droplets | jq -r '.[].name' | grep "$var")"
                 else
                         if [[ $query ]];
                         then
@@ -136,7 +136,7 @@ query_instances() {
 
         if [[ "$query" ]]
         then
-                selected="$selected $(echo $droplets | jq -r '.[].hostname' | grep -w "$query")"
+                selected="$selected $(echo $droplets | jq -r '.[].name' | grep -w "$query")"
         else
                 if [[ ! "$selected" ]]
                 then
