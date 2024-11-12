@@ -16,7 +16,7 @@ variable "snapshot_name" {
 
 source "ibmcloud-vpc" "packer" {
   api_key               = var.ibm_cloud_api_key
-  region                = var.region 
+  region                = var.physical_region 
   subnet_id             = var.vpc_subnet
   vsi_base_image_name     = "ibm-ubuntu-22-04-4-minimal-amd64-4"
   communicator            = "ssh"
