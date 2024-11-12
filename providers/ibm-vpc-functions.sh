@@ -53,9 +53,6 @@ instance_list() {
 }
 
 # used by axiom-ls
-}
-
-# used by axiom-ls
 instance_pretty(){
         data=$(instances)
         # number of instances
