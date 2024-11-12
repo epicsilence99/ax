@@ -11,13 +11,9 @@ create_instance() {
     image_id="$2"
     profile="$3"
     region="$4"
-    boot_script="$5"
-    zone="$(ibmcloud is zones --region $region | grep -v ID | awk '{print $1}' | head -1)"
-    subnet_id="$(ibmcloud is subnets --zone $zone | grep -v ID | awk '{print $1}' | head -1)"
-    vpc_id="$(ibmcloud is vpcs | grep -v ID | awk '{print $1}' | head -1)"
-    key_id="$(ibmcloud is keys | grep -v ID | awk '{print $1}' | head -1)"
-
-    ibmcloud is instance-create "$name" "$vpc_id" "$zone" "$profile" "$subnet_id" --image-id "$image_id" --key-ids "$key_id" --user-data "$boot_script" --wait 2>&1 >> /dev/null
+    vpc_id="$(jq -r '.vpc' "$AXIOM_PATH"/axiom.json)"
+    subnet_id="$(jq -r '.vpc_subnet' "$AXIOM_PATH"/axiom.json)"
+    ibmcloud is instance-create "$name" "$vpc_id" "$region" "$profile" "$subnet_id" --image "$image_id" 2>&1 >>/dev/null
     sleep 260
 }
 
@@ -41,14 +37,14 @@ delete_instance() {
 # Instances functions
 # used by many functions in this file
 instances() {
-    ibmcloud is instances --output json
+ibmcloud is instances --output json
 }
 
 # takes one argument, name of instance, returns raw IP address
 # used by axiom-ls axiom-init
 instance_ip() {
     host="$1"
-    instances | jq -r ".[] | select(.name==\"$host\") | .primary_network_interface.primary_ipv4_address"
+    instances | jq -r --arg host "$host" '.[] | select(.name == $host) | .primary_network_interface.primary_ip.address'
 }
 
 # used by axiom-select axiom-ls
@@ -57,39 +53,22 @@ instance_list() {
 }
 
 # used by axiom-ls
-instance_pretty() {
-    data=$(instances)
-    # number of instances
-    instances=$(echo $data | jq -r '.[] | .name' | wc -l)
+}
 
-    hourly_cost=0
-    for f in $(echo $data | jq -r '.[].profile'); do
-        new=$(bc <<< "$hourly_cost + $f")
-        hourly_cost=$new
-    done
-    totalhourly_Price=$hourly_cost
+# used by axiom-ls
+instance_pretty(){
+        data=$(instances)
+        # number of instances
+        instances=$(echo "$data" | jq -r '.[] | .name' | wc -l)
 
-    vpc_hours_used=0
-    for f in $(echo $data | jq -r '.[].created_at'); do
-        # Convert created_at to timestamp and calculate hours used
-        start=$(date -d "$f" +%s)
-        now=$(date +%s)
-        hours_used=$(bc <<< "scale=2; ($now - $start) / 3600")
-        new=$(bc <<< "$vpc_hours_used + $hours_used")
-        vpc_hours_used=$new
-    done
-    totalhours_used=$(printf "%.2f" $vpc_hours_used)
+        header="Instance,Primary Ip,Zone,Memory,CPU,Status,Profile"
+        fields='.[] | [.name, .primary_network_interface.primary_ip.address, .zone.name, .memory, .vcpu.count, .status, .profile.name] | @csv'
 
-    # VPC does not have recurring monthly cost per instance, so setting it to 0
-    monthly_cost=0
-
-    header="Instance,Primary Ip,Zone,Memory,CPU,Status,Hours used,\$/H,\$/M"
-    fields=".[] | [.name, .primary_network_interface.primary_ipv4_address, .zone.name, .memory, .vcpu_count, .status, (now - (.created_at | fromdate)) / 3600 | floor, (.profile | tonumber) ] | @csv"
-    totals="_,_,_,_,Instances,$instances,Total Hours,$totalhours_used,\$$totalhourly_Price/hr,\$$monthly_cost/mo"
-
-    # Data is sorted by default by field name
-    data=$(echo $data | jq -r "$fields" | sed 's/^,/0,/; :a;s/,,/,0,/g;ta')
-    (echo "$header" && echo "$data" && echo $totals) | sed 's/"//g' | column -t -s,
+        # Totals
+        totals="Total Instances: $instances,_,_,_,_,_,_"
+        # data is sorted by default by field name
+        data=$(echo $data | jq  -r "$fields"| sed 's/^,/0,/; :a;s/,,/,0,/g;ta')
+        (echo "$header" && echo "$data" && echo $totals) | sed 's/"//g' | column -t -s,
 }
 
 ###################################################################
@@ -114,7 +93,7 @@ generate_sshconfig() {
         echo -e "axiom will always attempt to SSH into the instances from their private backend network interface. To revert run: axiom-ssh --just-generate"
         for name in $(echo "$instances" | jq -r '.[].name')
         do
-            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_interface.primary_ipv4_address")
+            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_interface.primary_ip.address")
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
         done
         mv $sshnew  $AXIOM_PATH/.sshconfig
@@ -126,7 +105,7 @@ generate_sshconfig() {
     else
         for name in $(echo "$instances" | jq -r '.[].name')
         do
-            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_interface.primary_ipv4_address")
+            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_interface.primary_ip.address")
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
         done
         mv $sshnew  $AXIOM_PATH/.sshconfig
@@ -140,37 +119,37 @@ generate_sshconfig() {
 # used by axiom-ls axiom-select axiom-fleet axiom-rm axiom-power
 #
 query_instances() {
-	droplets="$(instances)"
-	selected=""
+        droplets="$(instances)"
+        selected=""
 
-	for var in "$@"; do
-		if [[ "$var" =~ "*" ]]
-		then
-			var=$(echo "$var" | sed 's/*/.*/g')
-			selected="$selected $(echo $droplets | jq -r '.[].hostname' | grep "$var")"
-		else
-			if [[ $query ]];
-			then
-				query="$query\|$var"
-			else
-				query="$var"
-			fi
-		fi
-	done
+        for var in "$@"; do
+                if [[ "$var" =~ "*" ]]
+                then
+                        var=$(echo "$var" | sed 's/*/.*/g')
+                        selected="$selected $(echo $droplets | jq -r '.[].hostname' | grep "$var")"
+                else
+                        if [[ $query ]];
+                        then
+                                query="$query\|$var"
+                        else
+                                query="$var"
+                        fi
+                fi
+        done
 
-	if [[ "$query" ]]
-	then
-		selected="$selected $(echo $droplets | jq -r '.[].hostname' | grep -w "$query")"
-	else
-		if [[ ! "$selected" ]]
-		then
-			echo -e "${Red}No instance supplied, use * if you want to delete all instances...${Color_Off}"
-			exit
-		fi
-	fi
+        if [[ "$query" ]]
+        then
+                selected="$selected $(echo $droplets | jq -r '.[].hostname' | grep -w "$query")"
+        else
+                if [[ ! "$selected" ]]
+                then
+                        echo -e "${Red}No instance supplied, use * if you want to delete all instances...${Color_Off}"
+                        exit
+                fi
+        fi
 
-	selected=$(echo "$selected" | tr ' ' '\n' | sort -u)
-	echo -n $selected
+        selected=$(echo "$selected" | tr ' ' '\n' | sort -u)
+        echo -n $selected
 }
 
 ###################################################################
@@ -178,10 +157,7 @@ query_instances() {
 # used by axiom-fleet axiom-init
 get_image_id() {
     query="$1"
-    images=$(ibmcloud is images --output json | jq '.[] | select(.visibility == "private")')
-    name=$(echo $images | jq -r ".[].name" | grep -wx "$query" | tail -n 1)
-    id=$(echo $images | jq -r ".[] | select(.name==\"$name\") | .id")
-
+    id=$(ibmcloud is images --output json | jq -r '.[] |  select(.visibility == "private") | select(.name == "'$query'") | .id')
     echo $id
 }
 
@@ -218,13 +194,6 @@ create_snapshot() {
 # Get data about regions
 # used by axiom-regions
 #
-list_regions() {
-    regions=$(ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ',')
-}
-
-regions() {
-    regions=$(ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ',')
-}
 
 ###################################################################
 #  Manage power state of instances
@@ -232,14 +201,8 @@ regions() {
 #
 poweron() {
 instance_name="$1"
-force="$2"
 instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
-if [ "$force" == "true" ];
-then
-ibmcloud is instance-action "$instance_id" start --force
-else
-ibmcloud is instance-action "$instance_id" start
-fi
+ibmcloud is instance-start "$instance_id"
 }
 
 # axiom-power
@@ -249,9 +212,9 @@ force="$2"
 instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
 if [ "$force" == "true" ];
 then
-ibmcloud is instance-action "$instance_id" stop --force
+ibmcloud is instance-stop "$instance_id" --force
 else
-ibmcloud is instance-action "$instance_id" stop
+ibmcloud is instance-stop "$instance_id"
 fi
 }
 
@@ -262,9 +225,9 @@ force="$2"
 instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
 if [ "$force" == "true" ];
 then
-ibmcloud is instance-action "$instance_id" reboot --force
+ibmcloud is instance-reboot "$instance_id" --force
 else
-ibmcloud is instance-action "$instance_id" reboot
+ibmcloud is instance-reboot "$instance_id"
 fi
 }
 
