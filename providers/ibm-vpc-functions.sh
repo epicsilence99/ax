@@ -13,8 +13,9 @@ create_instance() {
     region="$4"
     vpc_id="$(jq -r '.vpc' "$AXIOM_PATH"/axiom.json)"
     subnet_id="$(jq -r '.vpc_subnet' "$AXIOM_PATH"/axiom.json)"
-    ibmcloud is instance-create "$name" "$vpc_id" "$region" "$profile" "$subnet_id" --image "$image_id" --pnac-vni-name "$name"-vni  --pnac-name "$name"-pnac 2>&1 >>/dev/null && \
-     ibmcloud is  floating-ip-reserve "$name"-ip --vni "$name"-vni --in "$name" >>/dev/null
+    security_group_name="$(jq -r '.security_group' "$AXIOM_PATH"/axiom.json)"
+    ibmcloud is instance-create "$name" "$vpc_id" "$region" "$profile" "$subnet_id" --image "$image_id" --pnac-vni-name "$name"-vni  --pnac-name "$name"-pnac --sgs "$security_group_name" 2>&1 >>/dev/null && \
+     ibmcloud is floating-ip-reserve "$name"-ip --vni "$name"-vni --in "$name" >>/dev/null
     sleep 260
 }
 
@@ -65,7 +66,7 @@ instance_pretty(){
         instances=$(echo "$data" | jq -r '.[] | .name' | wc -l)
 
         header="Instance,Primary Ip,Backend Ip,Zone,Memory,CPU,Status,Profile"
-        fields='.[] | [.name, .primary_network_attachment.virtual_network_interface.floating_ips[].address, .primary_network_interface.primary_ip.address, .zone.name, .memory, .vcpu.count, .status, .profile.name] | @csv'
+        fields='.[] | [.name // null, .primary_network_attachment.virtual_network_interface.floating_ips[]?.address // null, .primary_network_interface.primary_ip.address // null, .zone.name // null, .memory // null, .vcpu.count // null, .status // null, .profile.name // null] | @csv'
 
         # Totals
         totals="Total Instances: $instances,_,_,_,_,_,_,_"
