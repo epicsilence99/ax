@@ -1,5 +1,6 @@
 #!/bin/bash
 
+set -xv
 AXIOM_PATH="$HOME/.axiom"
 source "$AXIOM_PATH/interact/includes/vars.sh"
 
@@ -161,10 +162,40 @@ function setVPC {
    else
     vpc_subnet=$vpc_subnet
    fi
+
+ echo -e "${BGreen}Printing Available Security Groups for VPC $vpc${Color_Off}"
+ ibmcloud is security-groups --vpc $vpc --resource-group-name $resource_group
+
+ # Prompt user to enter a security group name
+ echo -e -n "${Green}Please enter a security group name above or press enter to create a new security group with a random name \n>> ${Color_Off}"
+ read SECURITY_GROUP
+
+ # If no security group name is provided, create a new one with a random name
+ if [[ "$SECURITY_GROUP" == "" ]]; then
+  axiom_sg_random="axiom-$(date +%m-%d-%H-%M-%S-%1N)"
+  SECURITY_GROUP=$axiom_sg_random
+  echo -e "${BGreen}Creating an Axiom Security Group: ${Color_Off}"
+  ibmcloud is security-group-delete "$SECURITY_GROUP"  --force > /dev/null 2>&1
+  sc=$(ibmcloud is security-group-create $SECURITY_GROUP $vpc --resource-group-name $resource_group --output JSON)
+  group_name=$(echo "$sc" | jq -r .name )
+  echo -e "${BGreen}Created Security Group: $group_name ${Color_Off}"
+ else
+  # Use the existing security group
+  echo -e "${BGreen}Using Security Group: $SECURITY_GROUP ${Color_Off}"
+  group_name=$SECURITY_GROUP
+
+  if [ -z "$group_name" ]; then
+    echo -e "${BGreen}Security Group '$SECURITY_GROUP' not found. Exiting.${Color_Off}"
+    exit 1
+  fi
+ fi
+
+ # Attempt to add the rule
+ ibmcloud is security-group-rule-add $group_name inbound tcp --port-min 2266  --port-max 2266 --vpc $vpc --output JSON | jq -r .id 2>&1
 }
 
 function setprofile {
-    data="{\"ibm_cloud_api_key\":\"$ibm_cloud_api_key\",\"default_size\":\"$profile\",\"resource_group\":\"$resource_group\",\"physical_region\":\"$region\",\"region\":\"$zone\",\"provider\":\"ibm-vpc\",\"vpc\":\"$vpc\",\"vpc_subnet\":\"$vpc_subnet\"}"
+    data="{\"ibm_cloud_api_key\":\"$ibm_cloud_api_key\",\"default_size\":\"$profile\",\"resource_group\":\"$resource_group\",\"physical_region\":\"$region\",\"region\":\"$zone\",\"provider\":\"ibm-vpc\",\"vpc\":\"$vpc\",\"vpc_subnet\":\"$vpc_subnet\",\"security_group\":\"$group_name\"}"
     echo -e "${BGreen}Profile settings below:${Color_Off}"
     echo $data | jq ' .ibm_cloud_api_key = "********"'
     echo -e "${BWhite}Press enter to save these to a new profile, type 'r' to start over.${Color_Off}"
