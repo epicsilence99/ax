@@ -14,7 +14,7 @@ create_instance() {
     vpc_id="$(jq -r '.vpc' "$AXIOM_PATH"/axiom.json)"
     subnet_id="$(jq -r '.vpc_subnet' "$AXIOM_PATH"/axiom.json)"
     security_group_name="$(jq -r '.security_group' "$AXIOM_PATH"/axiom.json)"
-    ibmcloud is instance-create "$name" "$vpc_id" "$region" "$profile" "$subnet_id" --image "$image_id" --pnac-vni-name "$name"-vni  --pnac-name "$name"-pnac --sgs "$security_group_name" 2>&1 >>/dev/null && \
+    ibmcloud is instance-create "$name" "$vpc_id" "$region" "$profile" "$subnet_id" --image "$image_id" --pnac-vni-name "$name"-vni  --pnac-name "$name"-pnac --pnac-vni-sgs "$security_group_name" 2>&1 >>/dev/null && \
      ibmcloud is floating-ip-reserve "$name"-ip --vni "$name"-vni --in "$name" >>/dev/null
     sleep 260
 }
