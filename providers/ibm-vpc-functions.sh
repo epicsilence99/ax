@@ -25,12 +25,18 @@ create_instance() {
 delete_instance() {
     name="$1"
     force="$2"
-    if [ "$force" == "true" ]
-    then
-        ibmcloud is instance-delete "$name" --force >/dev/null 2>&1
-    else
-        ibmcloud is instance-delete "$name" 
+    id="$(instance_id "$name")"
+
+    if [ "$force" != "true" ]; then
+        read -p "Are you sure you want to delete instance '$name'? (y/N): " confirm
+        if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+            echo "Instance deletion aborted."
+            return 1
+        fi
     fi
+
+    ibmcloud is instance-delete "$name" --force >/dev/null 2>&1
+    ibmcloud is floating-ip-release "$name"-ip --force >/dev/null 2>&1
 }
 
 ###################################################################
@@ -44,7 +50,7 @@ ibmcloud is instances --output json
 # used by axiom-ls axiom-init
 instance_ip() {
     host="$1"
-    instances | jq -r --arg host "$host" '.[] | select(.name == $host) | .primary_network_interface.primary_ip.address'
+    instances | jq -r --arg host "$host" '.[] | select(.name == $host) |  .primary_network_attachment.virtual_network_interface.floating_ips[].address' | head -n 1
 }
 
 # used by axiom-select axiom-ls
@@ -58,11 +64,11 @@ instance_pretty(){
         # number of instances
         instances=$(echo "$data" | jq -r '.[] | .name' | wc -l)
 
-        header="Instance,Primary Ip,Zone,Memory,CPU,Status,Profile"
-        fields='.[] | [.name, .primary_network_interface.primary_ip.address, .zone.name, .memory, .vcpu.count, .status, .profile.name] | @csv'
+        header="Instance,Primary Ip,Backend Ip,Zone,Memory,CPU,Status,Profile"
+        fields='.[] | [.name, .primary_network_attachment.virtual_network_interface.floating_ips[].address, .primary_network_interface.primary_ip.address, .zone.name, .memory, .vcpu.count, .status, .profile.name] | @csv'
 
         # Totals
-        totals="Total Instances: $instances,_,_,_,_,_,_"
+        totals="Total Instances: $instances,_,_,_,_,_,_,_"
         # data is sorted by default by field name
         data=$(echo $data | jq  -r "$fields"| sed 's/^,/0,/; :a;s/,,/,0,/g;ta')
         (echo "$header" && echo "$data" && echo $totals) | sed 's/"//g' | column -t -s,
@@ -90,7 +96,7 @@ generate_sshconfig() {
         echo -e "axiom will always attempt to SSH into the instances from their private backend network interface. To revert run: axiom-ssh --just-generate"
         for name in $(echo "$instances" | jq -r '.[].name')
         do
-            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_interface.primary_ip.address")
+            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[].address" |head -n 1)
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
         done
         mv $sshnew  $AXIOM_PATH/.sshconfig
@@ -102,7 +108,7 @@ generate_sshconfig() {
     else
         for name in $(echo "$instances" | jq -r '.[].name')
         do
-            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_interface.primary_ip.address")
+            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[].address" |head -n1)
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
         done
         mv $sshnew  $AXIOM_PATH/.sshconfig
