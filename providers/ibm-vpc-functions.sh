@@ -96,7 +96,7 @@ generate_sshconfig() {
         echo -e "axiom will always attempt to SSH into the instances from their private backend network interface. To revert run: axiom-ssh --just-generate"
         for name in $(echo "$instances" | jq -r '.[].name')
         do
-            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[].address" |head -n 1)
+            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0].address // \"null\"" |head -n 1)
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
         done
         mv $sshnew  $AXIOM_PATH/.sshconfig
@@ -108,7 +108,7 @@ generate_sshconfig() {
     else
         for name in $(echo "$instances" | jq -r '.[].name')
         do
-            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[].address" |head -n1)
+            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0].address  // \"null\"" |head -n1)
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
         done
         mv $sshnew  $AXIOM_PATH/.sshconfig
