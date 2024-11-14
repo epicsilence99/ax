@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ip=$(curl -s https://ifconfig.me/)
+ip=$(wget -qO- "https://ipecho.net/plain")
 echo ""
 cat << EOF
  █████╗ ██╗  ██╗
