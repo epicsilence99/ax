@@ -121,7 +121,7 @@ generate_sshconfig() {
     else
         for name in $(echo "$instances" | jq -r '.[].name'); do
             primary_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0]?.address // empty")
-            network_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .network_interfaces[].floating_ips[].?address // empty")
+            network_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .network_interfaces[].floating_ips[]?.address // empty")
             ip=$(echo -e "$primary_ip\n$network_ip" | grep -v "^$" | head -n 1)
             ip=${ip:-"null"}  # Assign "null" if both IPs are empty
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
