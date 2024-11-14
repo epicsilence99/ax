@@ -212,6 +212,12 @@ create_snapshot() {
 # Get data about regions
 # used by axiom-regions
 #
+list_regions() {
+    regions=$(ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ',')
+}
+regions() {
+    regions=$(ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ',')
+}
 
 ###################################################################
 #  Manage power state of instances
