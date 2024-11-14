@@ -213,10 +213,10 @@ create_snapshot() {
 # used by axiom-regions
 #
 list_regions() {
-    ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ',')
+    ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ','
 }
 regions() {
-    ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ',')
+    ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ','
 }
 
 ###################################################################
