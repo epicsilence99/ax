@@ -214,9 +214,11 @@ create_snapshot() {
 #
 list_regions() {
     regions=$(ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ',')
+    echo $regions
 }
 regions() {
     regions=$(ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ',')
+    echo $regions
 }
 
 ###################################################################
