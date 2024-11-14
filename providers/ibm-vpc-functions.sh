@@ -60,29 +60,40 @@ instance_list() {
 
 # used by axiom-ls
 instance_pretty(){
-        data=$(instances)
-        # number of instances
-        instances=$(echo "$data" | jq -r '.[] | .name' | wc -l)
+    data=$(instances)
+    # number of instances
+    instances=$(echo "$data" | jq -r '. | length')
 
-        header="Instance,Primary Ip,Backend Ip,Zone,Memory,CPU,Status,Profile"
-        fields='.[] | [.name // null, .primary_network_attachment.virtual_network_interface.floating_ips[]?.address // null, .primary_network_interface.primary_ip.address // null, .zone.name // null, .memory // null, .vcpu.count // null, .status // null, .profile.name // null] | @csv'
+    header="Instance,Primary Ip,Backend Ip,Zone,Memory,CPU,Status,Profile"
+    fields='.[] | [
+        .name // "",
+        (
+            [
+                .primary_network_attachment?.virtual_network_interface?.floating_ips[0]?.address,
+                .network_interfaces[]?.floating_ips[]?.address
+            ] | map(select(. != null and . != "")) | .[0] // ""
+        ),
+        .primary_network_interface?.primary_ip?.address // "",
+        .zone?.name // "",
+        .memory // "",
+        .vcpu?.count // "",
+        .status // "",
+        .profile?.name // ""
+    ] | @csv'
 
-        # Totals
-        totals="Total Instances: $instances,_,_,_,_,_,_,_"
-        # data is sorted by default by field name
-        data=$(echo $data | jq  -r "$fields"| sed 's/^,/0,/; :a;s/,,/,0,/g;ta')
-        (echo "$header" && echo "$data" && echo $totals) | sed 's/"//g' | column -t -s,
+    # Totals
+    totals="Total Instances: $instances,_,_,_,_,_,_,_"
+    # Process and print data
+    data=$(echo "$data" | jq -r "$fields" | sed 's/^,/0,/; :a;s/,,/,0,/g;ta')
+    (echo "$header" && echo "$data" && echo "$totals") | sed 's/"//g' | column -t -s,
 }
 
-###################################################################
 #  Dynamically generates axiom's SSH config based on your cloud inventory
 #  Choose between generating the sshconfig using private IP details, public IP details or optionally lock
 #  Lock will never generate an SSH config and only used the cached config ~/.axiom/.sshconfig
-#  Used for axiom-exec axiom-fleet axiom-ssh
-#
 generate_sshconfig() {
     accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
-    current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1)> /dev/null 2>&1
+    current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1) > /dev/null 2>&1
     instances="$(instances)"
     sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
     echo -n "" > $sshnew
@@ -92,26 +103,30 @@ generate_sshconfig() {
     generate_sshconfig="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.generate_sshconfig')"
 
     if [[ "$generate_sshconfig" == "private" ]]; then
-        echo -e "Warning your SSH config generation toggle is set to 'Private' for account : $(echo $current)."
-        echo -e "axiom will always attempt to SSH into the instances from their private backend network interface. To revert run: axiom-ssh --just-generate"
-        for name in $(echo "$instances" | jq -r '.[].name')
-        do
-            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0].address // \"null\"" |head -n 1)
+        echo -e "Warning your SSH config generation toggle is set to 'Private' for account: $(echo $current)."
+        echo -e "Axiom will always attempt to SSH into the instances from their private backend network interface. To revert, run: axiom-ssh --just-generate"
+        for name in $(echo "$instances" | jq -r '.[].name'); do
+            primary_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0].address // empty")
+            network_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .network_interfaces[].floating_ips[].address // empty")
+            ip=$(echo -e "$primary_ip\n$network_ip" | grep -v "^$" | head -n 1)
+            ip=${ip:-"null"}  # Assign "null" if both IPs are empty
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
         done
-        mv $sshnew  $AXIOM_PATH/.sshconfig
+        mv $sshnew $AXIOM_PATH/.sshconfig
 
     elif [[ "$generate_sshconfig" == "cache" ]]; then
-        echo -e "Warning your SSH config generation toggle is set to 'Cache' for account : $(echo $current)."
-        echo -e "axiom will never attempt to regenerate the SSH config. To revert run: axiom-ssh --just-generate"
+        echo -e "Warning your SSH config generation toggle is set to 'Cache' for account: $(echo $current)."
+        echo -e "Axiom will never attempt to regenerate the SSH config. To revert, run: axiom-ssh --just-generate"
 
     else
-        for name in $(echo "$instances" | jq -r '.[].name')
-        do
-            ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0].address  // \"null\"" |head -n1)
+        for name in $(echo "$instances" | jq -r '.[].name'); do
+            primary_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0].address // empty")
+            network_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .network_interfaces[].floating_ips[].address // empty")
+            ip=$(echo -e "$primary_ip\n$network_ip" | grep -v "^$" | head -n 1)
+            ip=${ip:-"null"}  # Assign "null" if both IPs are empty
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
         done
-        mv $sshnew  $AXIOM_PATH/.sshconfig
+        mv $sshnew $AXIOM_PATH/.sshconfig
     fi
 }
 
