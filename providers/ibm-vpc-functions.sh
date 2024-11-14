@@ -106,8 +106,8 @@ generate_sshconfig() {
         echo -e "Warning your SSH config generation toggle is set to 'Private' for account: $(echo $current)."
         echo -e "Axiom will always attempt to SSH into the instances from their private backend network interface. To revert, run: axiom-ssh --just-generate"
         for name in $(echo "$instances" | jq -r '.[].name'); do
-            primary_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0].address // empty")
-            network_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .network_interfaces[].floating_ips[].address // empty")
+            primary_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0]?.address // empty")
+            network_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .network_interfaces[].floating_ips[]?.address // empty")
             ip=$(echo -e "$primary_ip\n$network_ip" | grep -v "^$" | head -n 1)
             ip=${ip:-"null"}  # Assign "null" if both IPs are empty
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
@@ -120,8 +120,8 @@ generate_sshconfig() {
 
     else
         for name in $(echo "$instances" | jq -r '.[].name'); do
-            primary_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0].address // empty")
-            network_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .network_interfaces[].floating_ips[].address // empty")
+            primary_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .primary_network_attachment.virtual_network_interface.floating_ips[0]?.address // empty")
+            network_ip=$(echo "$instances" | jq -r ".[] | select(.name==\"$name\") | .network_interfaces[].floating_ips[].?address // empty")
             ip=$(echo -e "$primary_ip\n$network_ip" | grep -v "^$" | head -n 1)
             ip=${ip:-"null"}  # Assign "null" if both IPs are empty
             echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
