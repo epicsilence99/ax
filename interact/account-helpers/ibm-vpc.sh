@@ -191,7 +191,7 @@ function setVPC {
  fi
 
  # Attempt to add the rule
- ibmcloud is security-group-rule-add $group_name inbound tcp --port-min 2266  --port-max 2266 --vpc $vpc --output JSON | jq -r .id 2>&1
+ ibmcloud is security-group-rule-add $group_name inbound tcp --port-min 2266 --port-max 2266 --vpc $vpc --output JSON | jq -r .id 2>&1 && ibmcloud is security-group-rule-add $group_name outbound all --vpc $vpc --output JSON | jq -r .id 2>&1
 }
 
 function setprofile {
