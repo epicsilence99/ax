@@ -184,7 +184,7 @@ get_image_id() {
 # used for axiom-images
 #
 get_snapshots() {
-        ibmcloud is images --output json | jq '.[] | select(.visibility == "private")'
+        ibmcloud is images list --visibility private
 }
 
 # axiom-images
@@ -196,7 +196,7 @@ delete_snapshot() {
 
 # axiom-images
 snapshots() {
-        ibmcloud is images --output json | jq '.[] | select(.visibility == "private")'
+        ibmcloud is images --output json --visibility private
 }
 
 # axiom-images
