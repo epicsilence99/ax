@@ -26,7 +26,7 @@ create_instance() {
 delete_instance() {
     name="$1"
     force="$2"
-    
+
     if [ "$force" != "true" ]; then
         read -p "Are you sure you want to delete instance '$name'? (y/N): " confirm
         if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
@@ -50,7 +50,12 @@ ibmcloud is instances --output json
 # used by axiom-ls axiom-init
 instance_ip() {
     host="$1"
-    instances | jq -r --arg host "$host" '.[] | select(.name == $host) |  .primary_network_attachment.virtual_network_interface.floating_ips[].address' | head -n 1
+    instances | jq -r '.[] | select(.name == "'"$host"'") | (
+        [
+            .primary_network_attachment?.virtual_network_interface?.floating_ips[0]?.address,
+            .network_interfaces[]?.floating_ips[]?.address
+        ] | map(select(. != null and . != "")) | .[0] // ""
+    )' | head -n 1
 }
 
 # used by axiom-select axiom-ls
@@ -58,13 +63,10 @@ instance_list() {
     instances | jq -r '.[].name'
 }
 
-# used by axiom-ls
-instance_pretty(){
+instance_pretty() {
     data=$(instances)
-    # number of instances
-    instances=$(echo "$data" | jq -r '. | length')
-
-    header="Instance,Primary Ip,Backend Ip,Zone,Memory,CPU,Status,Profile"
+    current_time=$(date +%s)  # Get the current time in seconds since epoch
+    header="Instance,Primary Ip,Backend Ip,Zone,Memory,CPU,Status,Profile,Active Hours"
     fields='.[] | [
         .name // "",
         (
@@ -78,13 +80,29 @@ instance_pretty(){
         .memory // "",
         .vcpu?.count // "",
         .status // "",
-        .profile?.name // ""
-    ] | @csv'
+        .profile?.name // "",
 
-    # Totals
-    totals="Total Instances: $instances,_,_,_,_,_,_,_"
     # Process and print data
     data=$(echo "$data" | jq -r "$fields" | sed 's/^,/0,/; :a;s/,,/,0,/g;ta')
+
+    # Initialize total_active_hours
+    total_active_hours=0
+
+    # Calculate active hours and total hours
+    data=$(echo "$data" | while IFS=',' read -r name primary_ip backend_ip zone memory cpu status profile created_at; do
+        created_ts=$(date -d "${created_at//\"/}" +%s)
+        active_hours=$(( (current_time - created_ts) / 3600 ))
+        total_active_hours=$((total_active_hours + active_hours))
+        echo "$name,$primary_ip,$backend_ip,$zone,$memory,$cpu,$status,$profile,$active_hours"
+    done)
+
+    # Sum total active hours
+    total_active_hours=$(echo "$data" | awk -F, '{sum+=$9} END {print sum}')
+
+    # Totals
+    totals="Total Instances: $instances,_,_,_,_,_,_,_,Total Active Hours: $total_active_hours"
+
+    # Print header, data, and totals
     (echo "$header" && echo "$data" && echo "$totals") | sed 's/"//g' | column -t -s,
 }
 
@@ -175,37 +193,42 @@ query_instances() {
 # used by axiom-fleet axiom-init
 get_image_id() {
     query="$1"
-    id=$(ibmcloud is images --output json | jq -r '.[] |  select(.visibility == "private") | select(.name == "'$query'") | .id')
-    echo $id
+    images=$(ibmcloud is images --visibility private --output json)
+    id=$(echo "$images" | jq -r '.[] | select(.name=="'"$query"'") | .id')
+
+    echo "$id"
 }
 
 ###################################################################
 # Manage snapshots
 # used for axiom-images
-#
-get_snapshots() {
-        ibmcloud is images list --visibility private
+    ibmcloud is snapshots
 }
 
 # axiom-images
 delete_snapshot() {
- name=$1
- image_id=$(get_image_id "$name")
- ibmcloud is image-delete "$image_id"
+    name=$1
+    force="$2"
+    snapshot_id=$(snapshots | jq -r '.[] | select(.name=="'"$name"'") | .id')
+    if [ "$force" == "true" ]
+    then
+    ibmcloud is snapshot-delete "$snapshot_id" --force
+    else
+    ibmcloud is snapshot-delete "$snapshot_id"
+    fi
 }
 
 # axiom-images
 snapshots() {
-        ibmcloud is images --output json --visibility private
+        ibmcloud is snapshots --output json
 }
 
 # axiom-images
 create_snapshot() {
-    instance_id="$1"
-    snapshot_name="$2"
-
-    # Capture the snapshot
-    ibmcloud is instance-create-snapshot "$instance_id" --name "$snapshot_name"
+       instance="$1"
+       snapshot_name="$2"
+       volume_id=$(ibmcloud is instances --output json | jq -r '.[] | select(.name=="'"$instance"'") | .volume_attachments[0].volume.id')
+      ibmcloud is snapshot-create --volume "$volume_id" --name "$snapshot_name"
 }
 
 ###################################################################
