@@ -63,6 +63,7 @@ instance_list() {
     instances | jq -r '.[].name'
 }
 
+# used by axiom-ls
 instance_pretty() {
     data=$(instances)
     current_time=$(date +%s)  # Get the current time in seconds since epoch
@@ -81,14 +82,14 @@ instance_pretty() {
         .vcpu?.count // "",
         .status // "",
         .profile?.name // "",
+        .created_at // ""
+    ] | @csv'
 
     # Process and print data
     data=$(echo "$data" | jq -r "$fields" | sed 's/^,/0,/; :a;s/,,/,0,/g;ta')
 
-    # Initialize total_active_hours
-    total_active_hours=0
-
     # Calculate active hours and total hours
+    total_active_hours=0
     data=$(echo "$data" | while IFS=',' read -r name primary_ip backend_ip zone memory cpu status profile created_at; do
         created_ts=$(date -d "${created_at//\"/}" +%s)
         active_hours=$(( (current_time - created_ts) / 3600 ))
@@ -106,9 +107,12 @@ instance_pretty() {
     (echo "$header" && echo "$data" && echo "$totals") | sed 's/"//g' | column -t -s,
 }
 
+###################################################################
 #  Dynamically generates axiom's SSH config based on your cloud inventory
 #  Choose between generating the sshconfig using private IP details, public IP details or optionally lock
 #  Lock will never generate an SSH config and only used the cached config ~/.axiom/.sshconfig
+#  Used for axiom-exec axiom-fleet axiom-ssh
+#
 generate_sshconfig() {
     accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
     current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1) > /dev/null 2>&1
@@ -202,6 +206,8 @@ get_image_id() {
 ###################################################################
 # Manage snapshots
 # used for axiom-images
+#
+get_snapshots(){
     ibmcloud is snapshots
 }
 
