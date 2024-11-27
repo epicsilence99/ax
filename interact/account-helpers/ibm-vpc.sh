@@ -51,8 +51,6 @@ if [[ "$(printf '%s\n' "$installed_version" "$IBMCloudCliVersion" | sort -V | he
         fi
         echo -e "${BGreen}Installing ibmcloud-cli...${Color_Off}"
         curl -fsSL https://clis.cloud.ibm.com/install/osx | sh
-        echo -e "${BGreen}Installing ibmcloud vpc plugin...${Color_Off}"
-        ibmcloud plugin install vpc-infrastructure -q -f
     elif [[ $BASEOS == "Linux" ]]; then
         if uname -a | grep -qi "Microsoft"; then
             OS="UbuntuWSL"
@@ -68,8 +66,6 @@ if [[ "$(printf '%s\n' "$installed_version" "$IBMCloudCliVersion" | sort -V | he
         elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
             echo -e "${BGreen}Installing ibmcloud-cli on Linux...${Color_Off}"
             curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
-            echo -e "${BGreen}Installing ibmcloud vpc plugin...${Color_Off}"
-            ibmcloud plugin install vpc-infrastructure -q -f
         elif [[ $OS == "Fedora" ]]; then
             echo "Needs Conversation for Fedora"
         fi
@@ -80,6 +76,10 @@ else
     echo "ibmcloud-cli is already at or above the recommended version $IBMCloudCliVersion."
 fi
 
+# Install IBM Cloud VPC Plugin
+echo -e "${BGreen}Installing ibmcloud vpc plugin...${Color_Off}"
+ibmcloud plugin install vpc-infrastructure -q -f
+        
 # Install IBM Cloud Packer Plugin
 echo -e "${BGreen}Installing IBM Cloud Packer Builder Plugin${Color_Off}"
 packer plugins install github.com/IBM/ibmcloud
