@@ -238,14 +238,25 @@ create_snapshot() {
 }
 
 ###################################################################
-# Get data about regions
+# Get data about regions and zones
 # used by axiom-regions
 #
 list_regions() {
-    ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ','
+    printf "%-10s %-60s\n" "Region" "Zones"
+    printf "%-10s %-60s\n" "----------" "------------------------------------------------------------"
+
+    local regions
+    regions=$(ibmcloud is regions --output json | jq -r '.[].name')
+
+    for region in $regions; do
+        ibmcloud target -r $region > /dev/null
+        zones=$(ibmcloud is zones --output json | jq -r '[.[].name] | join(", ")')
+        printf "%-10s %-60s\n" "$region" "$zones"
+    done
 }
+
 regions() {
-    ibmcloud is regions --output json | jq -r '.[].name' | tr '\n' ','
+    list_regions
 }
 
 ###################################################################
