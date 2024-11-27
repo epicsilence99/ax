@@ -15,14 +15,14 @@ create_instance() {
 
     user_data_file=$(mktemp)
     echo "$user_data" > "$user_data_file"
-    
+
     vpc_id="$(jq -r '.vpc' "$AXIOM_PATH"/axiom.json)"
     subnet_id="$(jq -r '.vpc_subnet' "$AXIOM_PATH"/axiom.json)"
     security_group_name="$(jq -r '.security_group' "$AXIOM_PATH"/axiom.json)"
-    
+
     ibmcloud is instance-create "$name" "$vpc_id" "$region" "$profile" "$subnet_id" --image "$image_id" --pnac-vni-name "$name"-vni  --pnac-name "$name"-pnac --pnac-vni-sgs "$security_group_name" --user-data @"$user_data_file" 2>&1 >>/dev/null && \
     ibmcloud is floating-ip-reserve "$name"-ip --vni "$name"-vni --in "$name" >>/dev/null
-    
+
     sleep 260
 }
 
@@ -210,33 +210,35 @@ get_image_id() {
 # used for axiom-images
 #
 get_snapshots(){
-    ibmcloud is snapshots
+    ibmcloud is images --visibility private
 }
 
 # axiom-images
 delete_snapshot() {
     name=$1
     force="$2"
-    snapshot_id=$(snapshots | jq -r '.[] | select(.name=="'"$name"'") | .id')
-    if [ "$force" == "true" ]
-    then
-    ibmcloud is snapshot-delete "$snapshot_id" --force
+    if [ "$force" == "true" ];  then
+     ibmcloud is image-delete "$name" --force
     else
-    ibmcloud is snapshot-delete "$snapshot_id"
+     ibmcloud is image-delete "$name"
     fi
 }
 
 # axiom-images
 snapshots() {
-        ibmcloud is snapshots --output json
+    ibmcloud is images --visibility private --output json
 }
 
 # axiom-images
 create_snapshot() {
-       instance="$1"
-       snapshot_name="$2"
-       volume_id=$(ibmcloud is instances --output json | jq -r '.[] | select(.name=="'"$instance"'") | .volume_attachments[0].volume.id')
-      ibmcloud is snapshot-create --volume "$volume_id" --name "$snapshot_name"
+    instance="$1"
+    snapshot_name="$2"
+    volume_id=$(ibmcloud is instances --output json | jq -r '.[] | select(.name=="'"$instance"'") | .volume_attachments[0].volume.id')
+    echo -e "Powering off VSI $instance.. please wait"
+    poweroff "$instance" true
+    echo -e "sleeping for 30 seconds.."
+    sleep 30
+    ibmcloud is image-create "$snapshot_name"  --source-volume "$volume_id" --quiet
 }
 
 ###################################################################
@@ -244,17 +246,37 @@ create_snapshot() {
 # used by axiom-regions
 #
 list_regions() {
-    printf "%-10s %-60s\n" "Region" "Zones"
-    printf "%-10s %-60s\n" "----------" "------------------------------------------------------------"
 
-    local regions
-    regions=$(ibmcloud is regions --output json | jq -r '.[].name')
-
-    for region in $regions; do
-        ibmcloud target -r $region > /dev/null
-        zones=$(ibmcloud is zones --output json | jq -r '[.[].name] | join(", ")')
-        printf "%-10s %-60s\n" "$region" "$zones"
-    done
+echo 'au-syd-1
+au-syd-2
+au-syd-3
+br-sao-1
+br-sao-2
+br-sao-3
+ca-tor-1
+ca-tor-2
+ca-tor-3
+eu-de-1
+eu-de-2
+eu-de-3
+eu-es-1
+eu-es-2
+eu-es-3
+eu-gb-1
+eu-gb-2
+eu-gb-3
+jp-osa-1
+jp-osa-2
+jp-osa-3
+jp-tok-1
+jp-tok-2
+jp-tok-3
+us-east-1
+us-east-2
+us-east-3
+us-south-1
+us-south-2
+us-south-3'
 }
 
 regions() {
@@ -268,7 +290,7 @@ regions() {
 poweron() {
     instance_name="$1"
     instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
-    ibmcloud is instance-start "$instance_id"
+    ibmcloud is instance-start "$instance_id" --quiet
 }
 
 # axiom-power
@@ -278,9 +300,9 @@ poweroff() {
     instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
     if [ "$force" == "true" ];
     then
-     ibmcloud is instance-stop "$instance_id" --force
+     ibmcloud is instance-stop "$instance_id" --force --quiet
     else
-     ibmcloud is instance-stop "$instance_id"
+     ibmcloud is instance-stop "$instance_id" --quiet
     fi
 }
 
@@ -291,9 +313,9 @@ reboot(){
     instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
     if [ "$force" == "true" ];
     then
-     ibmcloud is instance-reboot "$instance_id" --force
+     ibmcloud is instance-reboot "$instance_id" --force --quiet
     else
-     ibmcloud is instance-reboot "$instance_id"
+     ibmcloud is instance-reboot "$instance_id" --quiet
     fi
 }
 
