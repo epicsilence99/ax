@@ -11,11 +11,18 @@ create_instance() {
     image_id="$2"
     profile="$3"
     region="$4"
+    user_data="$5"
+
+    user_data_file=$(mktemp)
+    echo "$user_data" > "$user_data_file"
+    
     vpc_id="$(jq -r '.vpc' "$AXIOM_PATH"/axiom.json)"
     subnet_id="$(jq -r '.vpc_subnet' "$AXIOM_PATH"/axiom.json)"
     security_group_name="$(jq -r '.security_group' "$AXIOM_PATH"/axiom.json)"
-    ibmcloud is instance-create "$name" "$vpc_id" "$region" "$profile" "$subnet_id" --image "$image_id" --pnac-vni-name "$name"-vni  --pnac-name "$name"-pnac --pnac-vni-sgs "$security_group_name" 2>&1 >>/dev/null && \
-     ibmcloud is floating-ip-reserve "$name"-ip --vni "$name"-vni --in "$name" >>/dev/null
+    
+    ibmcloud is instance-create "$name" "$vpc_id" "$region" "$profile" "$subnet_id" --image "$image_id" --pnac-vni-name "$name"-vni  --pnac-name "$name"-pnac --pnac-vni-sgs "$security_group_name" --user-data @"$user_data_file" 2>&1 >>/dev/null && \
+    ibmcloud is floating-ip-reserve "$name"-ip --vni "$name"-vni --in "$name" >>/dev/null
+    
     sleep 260
 }
 
@@ -43,7 +50,7 @@ delete_instance() {
 # Instances functions
 # used by many functions in this file
 instances() {
-ibmcloud is instances --output json
+ ibmcloud is instances --output json
 }
 
 # takes one argument, name of instance, returns raw IP address
@@ -159,37 +166,32 @@ generate_sshconfig() {
 # used by axiom-ls axiom-select axiom-fleet axiom-rm axiom-power
 #
 query_instances() {
-        droplets="$(instances)"
-        selected=""
+    droplets="$(instances)"
+    selected=""
 
-        for var in "$@"; do
-                if [[ "$var" =~ "*" ]]
-                then
-                        var=$(echo "$var" | sed 's/*/.*/g')
-                        selected="$selected $(echo $droplets | jq -r '.[].name' | grep "$var")"
-                else
-                        if [[ $query ]];
-                        then
-                                query="$query\|$var"
-                        else
-                                query="$var"
-                        fi
-                fi
-        done
-
-        if [[ "$query" ]]
-        then
-                selected="$selected $(echo $droplets | jq -r '.[].name' | grep -w "$query")"
-        else
-                if [[ ! "$selected" ]]
-                then
-                        echo -e "${Red}No instance supplied, use * if you want to delete all instances...${Color_Off}"
-                        exit
-                fi
+    for var in "$@"; do
+        if [[ "$var" == "\\*" ]]; then
+            var="*"
         fi
 
-        selected=$(echo "$selected" | tr ' ' '\n' | sort -u)
-        echo -n $selected
+        if [[ "$var" == *"*"* ]]; then
+            var=$(echo "$var" | sed 's/\*/.*/g')
+            matches=$(echo "$droplets" | jq -r '.[].name' | grep -E "^${var}$")
+        else
+            matches=$(echo "$droplets" | jq -r '.[].name' | grep -w -E "^${var}$")
+        fi
+
+        if [[ -n "$matches" ]]; then
+            selected="$selected $matches"
+        fi
+    done
+
+    if [[ -z "$selected" ]]; then
+        return 1  # Exit with non-zero code but no output
+    fi
+
+    selected=$(echo "$selected" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+    echo -n "${selected}" | xargs
 }
 
 ###################################################################
@@ -264,35 +266,35 @@ regions() {
 #  Used for axiom-power
 #
 poweron() {
-instance_name="$1"
-instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
-ibmcloud is instance-start "$instance_id"
+    instance_name="$1"
+    instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
+    ibmcloud is instance-start "$instance_id"
 }
 
 # axiom-power
 poweroff() {
-instance_name="$1"
-force="$2"
-instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
-if [ "$force" == "true" ];
-then
-ibmcloud is instance-stop "$instance_id" --force
-else
-ibmcloud is instance-stop "$instance_id"
-fi
+    instance_name="$1"
+    force="$2"
+    instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
+    if [ "$force" == "true" ];
+    then
+     ibmcloud is instance-stop "$instance_id" --force
+    else
+     ibmcloud is instance-stop "$instance_id"
+    fi
 }
 
 # axiom-power
 reboot(){
-instance_name="$1"
-force="$2"
-instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
-if [ "$force" == "true" ];
-then
-ibmcloud is instance-reboot "$instance_id" --force
-else
-ibmcloud is instance-reboot "$instance_id"
-fi
+    instance_name="$1"
+    force="$2"
+    instance_id=$(ibmcloud is instances --output json | jq -r ".[] | select(.name == \"$instance_name\") | .id")
+    if [ "$force" == "true" ];
+    then
+     ibmcloud is instance-reboot "$instance_id" --force
+    else
+     ibmcloud is instance-reboot "$instance_id"
+    fi
 }
 
 # axiom-power axiom-images
