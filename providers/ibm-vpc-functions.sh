@@ -325,3 +325,76 @@ instance_id() {
     name="$1"
     ibmcloud is instances --output json | jq -r ".[] | select(.name==\"$name\") | .id"
 }
+
+###################################################################
+#  List available instance sizes
+#  Used by ax sizes
+#
+sizes_list() {
+    (echo -e "Name\tArchitecture\tvCPUs\tMemory(GiB)\tBandwidth"; \
+    ibmcloud is instance-profiles --output json | jq -r '.[] | select(.os_architecture.values[0] == "amd64") |
+  [
+    .name,
+    .os_architecture.values[0],
+    .vcpu_count.value,
+    .memory.value,
+    .bandwidth.value
+  ] | @tsv') | column -t
+}
+
+###################################################################
+# experimental v2 function
+# deletes multiple instances at the same time by name, if the second argument is set to "true", will not prompt
+# used by axiom-rm --multi
+#
+delete_instances() {
+    names="$1"
+    force="$2"
+
+    # Convert names to an array for processing
+    name_array=($names)
+
+   # Initialize an empty array for the results
+   ip_array=()
+
+   # Loop through the original array and add "-ip" to each element
+   for name in "${name_array[@]}"; do
+    ip_array+=("${name}-ip")
+   done
+
+    # Force deletion: Delete all VSIs without prompting
+    if [ "$force" == "true" ]; then
+        echo -e "${Red}Deleting: ${name_array[@]}...${Color_Off}"
+        ibmcloud is instance-delete -f "${name_array[@]}" >/dev/null 2>&1
+        ibmcloud is floating-ip-release "${ip_array[@]}" --force >/dev/null 2>&1
+
+    # Prompt for each names if force is not true
+    else
+        # Collect names for deletion after user confirmation
+        confirmed_names=()
+
+        for name in "${name_array[@]}"; do
+
+            echo -e -n "Are you sure you want to delete VPC VSI $name y/N) - default NO: "
+            read ans
+            if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
+                confirmed_names+=("$name")
+            else
+                echo "Deletion aborted for $name."
+            fi
+        done
+
+        confirmed_ip_array=()
+        for name in "${confirmed_names[@]}"; do
+         confirmed_ip_array+=("${confirmed_names}-ip")
+        done
+
+        # Delete confirmed VSIs and release floating Ips in bulk
+        if [ ${#confirmed_names[@]} -gt 0 ]; then
+            echo -e "${Red}Deleting: ${confirmed_names[@]}...${Color_Off}"
+            ibmcloud is instance-delete -f "${confirmed_names[@]}"  >/dev/null 2>&1
+            ibmcloud is floating-ip-release "${confirmed_ip_array[@]}" --force >/dev/null 2>&1
+
+        fi
+    fi
+}
