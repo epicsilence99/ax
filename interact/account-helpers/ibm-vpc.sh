@@ -1,6 +1,5 @@
 #!/bin/bash
 
-set -xv
 AXIOM_PATH="$HOME/.axiom"
 source "$AXIOM_PATH/interact/includes/vars.sh"
 
