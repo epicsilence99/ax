@@ -73,6 +73,7 @@ instance_list() {
 # used by axiom-ls
 instance_pretty() {
     data=$(instances)
+    instances=$(echo $data | jq -r '.[]|.name'| wc -l)
     current_time=$(date +%s)  # Get the current time in seconds since epoch
     header="Instance,Primary Ip,Backend Ip,Zone,Memory,CPU,Status,Profile,Active Hours"
     fields='.[] | [
