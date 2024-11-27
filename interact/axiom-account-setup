@@ -16,7 +16,7 @@ provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
 # IBM-specific logic: If provider is 'ibm', ask for Classic or VPC choice
 ibm_function() {
  if [[ "$provider" == "ibm" ]]; then
-    echo -e -n "${Green}Please choose the infrastructure:\n1) Classic\n2) VPC\n>> ${Color_Off}"
+    echo -e -n "${Green}Please choose the infrastructure provider:\n1) Classic\n2) VPC\n>> ${Color_Off}"
     read -e choice
 
     case $choice in
