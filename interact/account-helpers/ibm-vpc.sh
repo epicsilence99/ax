@@ -78,7 +78,7 @@ fi
 # Install IBM Cloud VPC Plugin
 echo -e "${BGreen}Installing ibmcloud vpc plugin...${Color_Off}"
 ibmcloud plugin install vpc-infrastructure -q -f
-        
+
 # Install IBM Cloud Packer Plugin
 echo -e "${BGreen}Installing IBM Cloud Packer Builder Plugin${Color_Off}"
 packer plugins install github.com/IBM/ibmcloud
@@ -117,9 +117,9 @@ function specs {
 
     echo -e "${Green}Printing available zones in region selected..\n${Color_Off}"
     ibmcloud is zones
-    echo -e -n "${BGreen}Please enter your default zone for $region (press enter for 'us-south-1'): \n>> ${Color_Off}"
+    echo -e -n "${BGreen}Please enter your default zone for $region (press enter for '$region-1'): \n>> ${Color_Off}"
     read zone
-    zone=${zone:-us-south-1}
+    zone=${zone:-$region-1}
 
     echo -e "${BGreen}Printing available instance profiles in zone/region...\n${Color_Off}"
     (echo -e "Name\tArchitecture\tvCPUs\tMemory(GiB)\tBandwidth"; \
@@ -140,7 +140,7 @@ function specs {
 function setVPC {
     echo -e "${Green}Printing IBM Cloud VPCs ${Color_Off}"
     ibmcloud is vpcs
-    echo -e -n "${Green}What VPC ID would you like to use? (press enter to create a new one): \n>> ${Color_Off}"
+    echo -e -n "${Green}Enter the VPC name you like to use (press enter to create a new one): \n>> ${Color_Off}"
     read vpc
     if [[ "$vpc" == "" ]]; then
      name="axiom-$(date +%m-%d-%H-%M-%S-%1N)"
@@ -151,22 +151,18 @@ function setVPC {
     else
      vpc=$vpc
    fi
-   echo -e "${Green}Printing available subnets in VPC $vpc ${Color_Off}"
-   ibmcloud is subnets --vpc $vpc
-   echo -e -n "${Green}What VPC subnet ID would you like to use? (press enter to create a new one): \n>> ${Color_Off}"
-   read vpc_subnet
-   if [[ "$vpc_subnet" == "" ]]; then
-   subnet_name="axiom-vpc-subnet-$(date +%m-%d-%H-%M-%S-%1N)"
-   vpc_subnet=$(ibmcloud is subnet-create $subnet_name $vpc --ipv4-address-count 256 --zone $zone --output json --resource-group-name $resource_group | jq -r .id)
-   else
-    vpc_subnet=$vpc_subnet
-   fi
+
+   echo -e "${Green}Creating subnets in all zones in $region ${Color_Off}"
+   subnet_name="$vpc-subnet-$region"
+   for i in $(seq 1 3); do
+    ibmcloud is subnet-create $subnet_name-$i $vpc --ipv4-address-count 256 --zone $region-$i --output json --resource-group-name $resource_group 2>&1 >>/dev/null
+   done
 
  echo -e "${BGreen}Printing Available Security Groups for VPC $vpc${Color_Off}"
  ibmcloud is security-groups --vpc $vpc --resource-group-name $resource_group
 
- # Prompt user to enter a security group ID
- echo -e -n "${Green}Please enter a security group ID above or press enter to create a new security group with a random name \n>> ${Color_Off}"
+ # Prompt user to enter a security group name
+ echo -e -n "${Green}Please enter a security group name above or press enter to create a new security group with a random name \n>> ${Color_Off}"
  read SECURITY_GROUP
 
  # If no security group name is provided, create a new one with a random name
@@ -176,28 +172,27 @@ function setVPC {
   echo -e "${BGreen}Creating an Axiom Security Group: ${Color_Off}"
   ibmcloud is security-group-delete "$SECURITY_GROUP"  --force > /dev/null 2>&1
   sc=$(ibmcloud is security-group-create $SECURITY_GROUP $vpc --resource-group-name $resource_group --output JSON)
-  group_name=$(echo "$sc" | jq -r .name)
-  group_id=$(echo "$sc" | jq -r .id)
+  group_name=$(echo "$sc" | jq -r .name )
   echo -e "${BGreen}Created Security Group: $group_name ${Color_Off}"
  else
   # Use the existing security group
   echo -e "${BGreen}Using Security Group: $SECURITY_GROUP ${Color_Off}"
-  group_id=$SECURITY_GROUP
+  group_name=$SECURITY_GROUP
 
-  if [ -z "$group_id" ]; then
+  if [ -z "$group_name" ]; then
     echo -e "${BGreen}Security Group '$SECURITY_GROUP' not found. Exiting.${Color_Off}"
     exit 1
   fi
  fi
 
  # Attempt to add the rule
- ibmcloud is security-group-rule-add $group_id inbound tcp --port-min 1 --port-max 65535 --vpc $vpc --output JSON | jq -r .id 2>&1 && ibmcloud is security-group-rule-add $group_id outbound all --vpc $vpc --output JSON | jq -r .id 2>&1
+ ibmcloud is security-group-rule-add $group_name inbound tcp --port-min 1 --port-max 65535 --vpc $vpc --output JSON | jq -r .id 2>&1 && ibmcloud is security-group-rule-add $group_name outbound all --vpc $vpc --output JSON | jq -r .id 2>&1
 }
 
 function setprofile {
-    data="{\"ibm_cloud_api_key\":\"$ibm_cloud_api_key\",\"default_size\":\"$profile\",\"resource_group\":\"$resource_group\",\"physical_region\":\"$region\",\"region\":\"$zone\",\"provider\":\"ibm-vpc\",\"vpc\":\"$vpc\",\"vpc_subnet\":\"$vpc_subnet\",\"security_group\":\"$group_id\"}"
+    data="{\"ibm_cloud_api_key\":\"$ibm_cloud_api_key\",\"default_size\":\"$profile\",\"resource_group\":\"$resource_group\",\"physical_region\":\"$region\",\"region\":\"$zone\",\"provider\":\"ibm-vpc\",\"vpc\":\"$vpc\",\"security_group\":\"$group_name\"}"
     echo -e "${BGreen}Profile settings below:${Color_Off}"
-    echo $data | jq ' .ibm_cloud_api_key = "********"'
+    echo $data | jq ' .ibm_cloud_api_key = "********************************************"'
     echo -e "${BWhite}Press enter to save these to a new profile, type 'r' to start over.${Color_Off}"
     read ans
     if [[ "$ans" == "r" ]]; then
