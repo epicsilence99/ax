@@ -64,6 +64,9 @@ get_default_size() {
   elif [[ "$provider" == "ibm-classic" ]]; then
     default_size="2048,2"
 
+  elif [[ "$provider" == "ibm-vpc" ]]; then
+    default_size="cx2-2x4"
+
   elif [[ "$provider" == "linode" ]]; then
     default_size="g6-standard-1"
 
