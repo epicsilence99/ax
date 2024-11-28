@@ -132,9 +132,9 @@ function specs {
     .bandwidth.value
   ] | @tsv') | column -t
 
-    echo -e -n "${BGreen}Please enter instance profile for your device to use (press enter for 'bx2-2x8'): \n>> ${Color_Off}"
+    echo -e -n "${BGreen}Please enter instance profile for your device to use (press enter for 'cx2-2x4'): \n>> ${Color_Off}"
     read profile
-    profile=${profile:-bx2-2x8}
+    profile=${profile:-cx2-2x4}
 }
 
 function setVPC {
@@ -165,8 +165,8 @@ function setVPC {
  echo -e "${BGreen}Printing Available Security Groups for VPC $vpc${Color_Off}"
  ibmcloud is security-groups --vpc $vpc --resource-group-name $resource_group
 
- # Prompt user to enter a security group name
- echo -e -n "${Green}Please enter a security group name above or press enter to create a new security group with a random name \n>> ${Color_Off}"
+ # Prompt user to enter a security group ID
+ echo -e -n "${Green}Please enter a security group ID above or press enter to create a new security group with a random name \n>> ${Color_Off}"
  read SECURITY_GROUP
 
  # If no security group name is provided, create a new one with a random name
@@ -176,25 +176,26 @@ function setVPC {
   echo -e "${BGreen}Creating an Axiom Security Group: ${Color_Off}"
   ibmcloud is security-group-delete "$SECURITY_GROUP"  --force > /dev/null 2>&1
   sc=$(ibmcloud is security-group-create $SECURITY_GROUP $vpc --resource-group-name $resource_group --output JSON)
-  group_name=$(echo "$sc" | jq -r .name )
+  group_name=$(echo "$sc" | jq -r .name)
+  group_id=$(echo "$sc" | jq -r .id)
   echo -e "${BGreen}Created Security Group: $group_name ${Color_Off}"
  else
   # Use the existing security group
   echo -e "${BGreen}Using Security Group: $SECURITY_GROUP ${Color_Off}"
-  group_name=$SECURITY_GROUP
+  group_id=$SECURITY_GROUP
 
-  if [ -z "$group_name" ]; then
+  if [ -z "$group_id" ]; then
     echo -e "${BGreen}Security Group '$SECURITY_GROUP' not found. Exiting.${Color_Off}"
     exit 1
   fi
  fi
 
  # Attempt to add the rule
- ibmcloud is security-group-rule-add $group_name inbound tcp --port-min 1 --port-max 65535 --vpc $vpc --output JSON | jq -r .id 2>&1 && ibmcloud is security-group-rule-add $group_name outbound all --vpc $vpc --output JSON | jq -r .id 2>&1
+ ibmcloud is security-group-rule-add $group_id inbound tcp --port-min 1 --port-max 65535 --vpc $vpc --output JSON | jq -r .id 2>&1 && ibmcloud is security-group-rule-add $group_id outbound all --vpc $vpc --output JSON | jq -r .id 2>&1
 }
 
 function setprofile {
-    data="{\"ibm_cloud_api_key\":\"$ibm_cloud_api_key\",\"default_size\":\"$profile\",\"resource_group\":\"$resource_group\",\"physical_region\":\"$region\",\"region\":\"$zone\",\"provider\":\"ibm-vpc\",\"vpc\":\"$vpc\",\"vpc_subnet\":\"$vpc_subnet\",\"security_group\":\"$group_name\"}"
+    data="{\"ibm_cloud_api_key\":\"$ibm_cloud_api_key\",\"default_size\":\"$profile\",\"resource_group\":\"$resource_group\",\"physical_region\":\"$region\",\"region\":\"$zone\",\"provider\":\"ibm-vpc\",\"vpc\":\"$vpc\",\"vpc_subnet\":\"$vpc_subnet\",\"security_group\":\"$group_id\"}"
     echo -e "${BGreen}Profile settings below:${Color_Off}"
     echo $data | jq ' .ibm_cloud_api_key = "********"'
     echo -e "${BWhite}Press enter to save these to a new profile, type 'r' to start over.${Color_Off}"
