@@ -395,7 +395,7 @@ if [[ $BASEOS == "Linux" ]]; then
 
        if ! command -v sudo &> /dev/null; then
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update && apt-get install sudo curl jq tzdata software-properties-common -y -qq
+        apt-get update && apt-get install sudo curl jq tzdata software-properties-common -y -qq --no-install-recommends
         ip=$(curl -s https://ifconfig.me/)
         ln -fs /usr/share/zoneinfo/$(curl ipinfo.io/"$ip" | jq -r .timezone) /etc/localtime
         dpkg-reconfigure --frontend noninteractive tzdata
